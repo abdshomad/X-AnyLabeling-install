@@ -1,0 +1,5 @@
+venv-client/*
+venv-server/*
+.venv/*
+.env
+logs/*

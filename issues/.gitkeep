@@ -1,0 +1,9 @@
+# Issues Directory
+
+This directory contains documentation of issues encountered during installation and their solutions.
+
+Each issue should be documented in a separate markdown file with the format:
+`issue-{number}-{description}.md`
+
+Example: `issue-001-pytorch-cuda-installation.md`
+

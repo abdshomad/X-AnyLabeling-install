@@ -3,3 +3,6 @@ venv-server/*
 .venv/*
 .env
 logs/*
+*.pid
+client.pid
+server.pid

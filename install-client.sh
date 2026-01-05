@@ -60,18 +60,47 @@ log "Starting X-AnyLabeling client installation with GPU support..."
 
 # Step 1: Check Python version
 log "Step 1: Checking Python version..."
-if ! command_exists python3; then
+# Check venv Python first if it exists, otherwise check system Python
+if [ -d "$VENV_DIR" ] && [ -f "$VENV_DIR/bin/python3" ]; then
+    PYTHON_CMD="$VENV_DIR/bin/python3"
+    log "Using Python from existing virtual environment"
+elif command_exists uv; then
+    # uv can provide Python 3.12, so we'll create venv with it
+    PYTHON_CMD="python3"  # Will be replaced by venv Python after creation
+    log "Will use uv to create Python 3.12 virtual environment"
+elif ! command_exists python3; then
     log_error "Python 3 is not installed. Please install Python 3.10 or higher."
     exit 1
+else
+    PYTHON_CMD="python3"
 fi
 
-PYTHON_VERSION=$(python3 --version 2>&1 | awk '{print $2}')
+# If venv exists, use its Python for version check
+if [ -f "$VENV_DIR/bin/python3" ]; then
+    PYTHON_VERSION=$("$VENV_DIR/bin/python3" --version 2>&1 | awk '{print $2}')
+else
+    PYTHON_VERSION=$($PYTHON_CMD --version 2>&1 | awk '{print $2}')
+fi
+
 PYTHON_MAJOR=$(echo $PYTHON_VERSION | cut -d. -f1)
 PYTHON_MINOR=$(echo $PYTHON_VERSION | cut -d. -f2)
 
 if [ "$PYTHON_MAJOR" -lt 3 ] || ([ "$PYTHON_MAJOR" -eq 3 ] && [ "$PYTHON_MINOR" -lt 10 ]); then
-    log_error "Python 3.10+ is required for X-AnyLabeling. Found: Python $PYTHON_VERSION"
-    exit 1
+    # If venv doesn't exist and system Python is too old, try to create venv with uv
+    if [ ! -d "$VENV_DIR" ] && command_exists uv; then
+        log "System Python is $PYTHON_VERSION, but venv doesn't exist. Creating venv with uv (Python 3.12)..."
+        uv venv --python 3.12 --seed "$VENV_DIR"
+        PYTHON_VERSION=$("$VENV_DIR/bin/python3" --version 2>&1 | awk '{print $2}')
+        PYTHON_MAJOR=$(echo $PYTHON_VERSION | cut -d. -f1)
+        PYTHON_MINOR=$(echo $PYTHON_VERSION | cut -d. -f2)
+    fi
+    
+    # Re-check after potential venv creation
+    if [ "$PYTHON_MAJOR" -lt 3 ] || ([ "$PYTHON_MAJOR" -eq 3 ] && [ "$PYTHON_MINOR" -lt 10 ]); then
+        log_error "Python 3.10+ is required for X-AnyLabeling. Found: Python $PYTHON_VERSION"
+        log_error "Please install Python 3.10+ or use 'uv venv --python 3.12' to create a virtual environment"
+        exit 1
+    fi
 fi
 
 log_success "Python version: $PYTHON_VERSION (meets requirement)"
@@ -111,9 +140,15 @@ log "Step 4: Checking virtual environment..."
 if [ -d "$VENV_DIR" ]; then
     log_success "Virtual environment already exists. Using existing: $VENV_DIR"
 else
-    log "Creating new virtual environment..."
-    python3 -m venv "$VENV_DIR"
-    log_success "Virtual environment created: $VENV_DIR"
+    log "Creating new virtual environment with uv (Python 3.12)..."
+    if command_exists uv; then
+        uv venv --python 3.12 --seed "$VENV_DIR"
+        log_success "Virtual environment created with uv: $VENV_DIR"
+    else
+        log "uv not found, falling back to python3 -m venv..."
+        python3 -m venv "$VENV_DIR"
+        log_success "Virtual environment created: $VENV_DIR"
+    fi
 fi
 
 # Step 5: Activate virtual environment and upgrade pip
